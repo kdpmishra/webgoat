@@ -22,13 +22,14 @@ steps:
 # Run SCA scan
 - powershell: |
     Write-Host "Running Dependency Check..."
-    dependency-check/bin/dependency-check.bat `
+    $dcPath = Get-ChildItem -Directory "dependency-check" | Select-Object -First 1
+    & "$($dcPath.FullName)\bin\dependency-check.bat" `
       --project "WebGoat-SCA" `
       --scan "." `
       --out "sca-report" `
       --format "ALL"
   displayName: "Run SCA - OWASP Dependency Check"
-
+  
 # Publish report as pipeline artifact
 - task: PublishPipelineArtifact@1
   inputs:
