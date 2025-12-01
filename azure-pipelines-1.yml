@@ -1,6 +1,8 @@
 trigger:
 - master    # or your default branch
 
+variables:
+- group: DevSecOps-Secrets
 pool:
   name: 'Default'   # your self-hosted runner pool
 
@@ -19,10 +21,8 @@ steps:
     Expand-Archive "dc.zip" -DestinationPath "dependency-check" -Force
   displayName: "Install OWASP Dependency Check"
 
-# Run SCA scan
 - powershell: |
     Write-Host "Running Dependency Check..."
-    # Create output folder if it doesn't exist
     if (-Not (Test-Path "sca-report")) {
         New-Item -ItemType Directory -Path "sca-report" | Out-Null
     }
@@ -31,9 +31,9 @@ steps:
       --project "WebGoat-SCA" `
       --scan "." `
       --out "sca-report" `
-      --format "ALL"
-  displayName: "Run SCA - OWASP Dependency Check"
-  
+      --format "ALL" `
+      --nvdApiKey "$(NVD_API_KEY)"
+  displayName: "Run SCA - OWASP Dependency Check (with NVD key)"  
   # Publish report as pipeline artifact
 - task: PublishPipelineArtifact@1
   inputs:
