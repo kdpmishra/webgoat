@@ -2,7 +2,7 @@ trigger:
 - master    # or your default branch
 
 pool:
-  name: 'SelfHostedPool'   # your self-hosted runner pool
+  name: 'Default'   # your self-hosted runner pool
 
 steps:
 - checkout: self
