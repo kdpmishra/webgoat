@@ -46,7 +46,12 @@ steps:
       $zip = "$(Build.SourcesDirectory)\dependency-check.zip"
       Invoke-WebRequest -Uri "https://github.com/jeremylong/DependencyCheck/releases/download/v10.0.4/dependency-check-10.0.4-release.zip" -OutFile $zip
       Expand-Archive -LiteralPath $zip -DestinationPath "$(Build.SourcesDirectory)" -Force
-      Rename-Item -Path "$(Build.SourcesDirectory)\dependency-check-10.0.4" -NewName "dependency-check"
+
+      # Rename whatever folder extracted
+      Get-ChildItem "$(Build.SourcesDirectory)" -Directory |
+        Where-Object { $_.Name -like "dependency-check*" } |
+        Select-Object -First 1 |
+        Rename-Item -NewName "dependency-check"
 
 - task: PowerShell@2
   displayName: "Run OWASP Dependency Check"
