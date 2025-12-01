@@ -21,22 +21,41 @@ steps:
     Expand-Archive "dc.zip" -DestinationPath "dependency-check" -Force
   displayName: "Install OWASP Dependency Check"
 
-- powershell: |
-    Write-Host "Running Dependency Check..."
-    if (-Not (Test-Path "sca-report")) {
-        New-Item -ItemType Directory -Path "sca-report" | Out-Null
-    }
-    $dcPath = Get-ChildItem -Directory "dependency-check" | Select-Object -First 1
-    & "$($dcPath.FullName)\bin\dependency-check.bat" `
-      --project "WebGoat-SCA" `
-      --scan "." `
-      --out "sca-report" `
-      --format "ALL" `
-      --nvdApiKey "FE087115-BDCE-F011-8364-129478FCB64D" `
-      --validForHours 24 `
-  displayName: "Run SCA - OWASP Dependency Check (Offline mode)"
+#- powershell: |
+#    Write-Host "Running Dependency Check..."
+#    if (-Not (Test-Path "sca-report")) {
+#        New-Item -ItemType Directory -Path "sca-report" | Out-Null
+#    }
+#    $dcPath = Get-ChildItem -Directory "dependency-check" | Select-Object -First 1
+#    & "$($dcPath.FullName)\bin\dependency-check.bat" `
+#      --project "WebGoat-SCA" `
+#      --scan "." `
+#      --out "sca-report" `
+#      --format "ALL" `
+#      --nvdApiKey "FE087115-BDCE-F011-8364-129478FCB64D" `
+#      --validForHours 24 `
+#  displayName: "Run SCA - OWASP Dependency Check (Offline mode)"
 
   # Publish report as pipeline artifact
+
+- task: PowerShell@2
+  displayName: "Run OWASP Dependency Check"
+  inputs:
+    targetType: 'inline'
+    script: |
+      $scanPath = "$(Build.SourcesDirectory)"
+      $outPath = "$(Build.SourcesDirectory)\sca-report"
+
+      New-Item -ItemType Directory -Force -Path $outPath | Out-Null
+
+      & "$(Build.SourcesDirectory)\dependency-check\bin\dependency-check.bat" `
+        --project "WebGoat" `
+        --scan "$scanPath" `
+        --format "HTML" `
+        --out "$outPath" `
+        --validForHours 24 `
+        --nvdApiKey "$(NVD_API_KEY)"
+
 - task: PublishPipelineArtifact@1
   inputs:
     targetPath: 'sca-report'
