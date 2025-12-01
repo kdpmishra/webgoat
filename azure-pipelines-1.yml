@@ -1,58 +1,61 @@
 trigger:
-- master
-
-variables:
-  - group: DevSecOps-Secrets
+- main
 
 pool:
-  name: 'Default'   # change if your pool name is different
+  name: 'Default'
+  demands:
+  - Agent.OS -equals Windows
 
 steps:
-- checkout: self
 
-- script: |
-    echo "Successfully pulled WebGoat repo from GitHub"
-    dir
-  displayName: "Verify repo files"
-
-# Download OWASP Dependency Check
+# 1) Download & extract Dependency-Check
 - task: PowerShell@2
-  displayName: "Download OWASP Dependency-Check"
+  displayName: "Download & Extract Dependency-Check"
   inputs:
     targetType: 'inline'
     script: |
+      $source = "https://github.com/jeremylong/DependencyCheck/releases/download/v10.0.4/dependency-check-10.0.4-release.zip"
       $zip = "$(Build.SourcesDirectory)\dependency-check.zip"
-      Invoke-WebRequest -Uri "https://github.com/jeremylong/DependencyCheck/releases/download/v10.0.4/dependency-check-10.0.4-release.zip" -OutFile $zip
-      Expand-Archive -LiteralPath $zip -DestinationPath "$(Build.SourcesDirectory)" -Force
-      
-      # Rename extracted folder
-      Get-ChildItem "$(Build.SourcesDirectory)" -Directory |
-        Where-Object { $_.Name -like "dependency-check*" } |
-        Select-Object -First 1 |
-        Rename-Item -NewName "dependency-check"
+      $extract = "$(Build.SourcesDirectory)"
 
-# Run OWASP Dependency Check
+      Write-Host "Downloading Dependency-Check..."
+      Invoke-WebRequest -Uri $source -OutFile $zip
+
+      Write-Host "Extracting..."
+      Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+
+      $folder = Get-ChildItem $extract -Directory | Where-Object { $_.Name -like "dependency-check*" } | Select-Object -First 1
+
+      if ($null -eq $folder) { throw "Dependency-Check folder not found after extraction" }
+
+      if ($folder.Name -ne "dependency-check") {
+        Rename-Item -Path $folder.FullName -NewName "dependency-check" -Force
+        Write-Host "Renamed extracted folder to 'dependency-check'"
+      } else {
+        Write-Host "Folder already named 'dependency-check'"
+      }
+
+# 2) Run scan
 - task: PowerShell@2
-  displayName: "Run OWASP Dependency Check"
+  displayName: "Run SCA Scan"
   inputs:
     targetType: 'inline'
     script: |
-      $scanPath = "$(Build.SourcesDirectory)"
-      $outPath = "$(Build.SourcesDirectory)\sca-report"
-      New-Item -ItemType Directory -Force -Path $outPath | Out-Null
+      $scan = "$(Build.SourcesDirectory)"
+      $report = "$(Build.SourcesDirectory)\sca-report"
+      New-Item -ItemType Directory -Force -Path $report | Out-Null
 
-      & "$(Build.SourcesDirectory)\dependency-check\bin\dependency-check.bat" `
-        --project "WebGoat" `
-        --scan "$scanPath" `
-        --format "HTML" `
-        --out "$outPath" `
-        --validForHours 24 `
-        --nvdApiKey "$(NVD_API_KEY)"   # ensure this exists in variable group
+      $exe = "$(Build.SourcesDirectory)\dependency-check\bin\dependency-check.bat"
+      if (!(Test-Path $exe)) { throw "Dependency-Check executable not found: $exe" }
 
-# Publish report
-- task: PublishPipelineArtifact@1
-  displayName: "Publish SCA report"
+      Write-Host "Starting scan..."
+      & $exe --project "WebGoat" --scan "$scan" --format "HTML" --out "$report" --validForHours 24 --nvdApiKey "$(NVD_API_KEY)"
+
+      Write-Host "SCA Report generated at: $report"
+
+# 3) Publish report
+- task: PublishBuildArtifacts@1
+  displayName: "Publish SCA Report"
   inputs:
-    targetPath: 'sca-report'
-    artifact: 'sca-report'
-    publishLocation: 'pipeline'
+    pathToPublish: "$(Build.SourcesDirectory)/sca-report"
+    artifactName: "sca-report"
