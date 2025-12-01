@@ -3,8 +3,6 @@ trigger:
 
 pool:
   name: 'Default'  # your self-hosted Windows agent pool
-  demands:
-    - Agent.OS -equals Windows
 
 steps:
 
