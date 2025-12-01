@@ -9,7 +9,7 @@ resources:
 - repo: self
 
 pool:
-  name: 'SelfHostedPool'
+  name: 'self-hosed-pool'
 
 steps:
 - checkout: self
