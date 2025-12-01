@@ -1,43 +1,21 @@
 trigger:
-- master    # or your default branch
+- master
 
 variables:
-- group: DevSecOps-Secrets
+  - group: DevSecOps-Secrets
+
 pool:
-  name: 'Default'   # your self-hosted runner pool
+  name: 'Default'   # change if your pool name is different
 
 steps:
 - checkout: self
 
 - script: |
     echo "Successfully pulled WebGoat repo from GitHub"
-    tree
+    dir
   displayName: "Verify repo files"
 
-# Install Dependency Check — only needed on first run
-- powershell: |
-    Write-Host "Downloading OWASP Dependency Check..."
-    Invoke-WebRequest "https://github.com/jeremylong/DependencyCheck/releases/download/v10.0.4/dependency-check-10.0.4-release.zip" -OutFile "dc.zip"
-    Expand-Archive "dc.zip" -DestinationPath "dependency-check" -Force
-  displayName: "Install OWASP Dependency Check"
-
-#- powershell: |
-#    Write-Host "Running Dependency Check..."
-#    if (-Not (Test-Path "sca-report")) {
-#        New-Item -ItemType Directory -Path "sca-report" | Out-Null
-#    }
-#    $dcPath = Get-ChildItem -Directory "dependency-check" | Select-Object -First 1
-#    & "$($dcPath.FullName)\bin\dependency-check.bat" `
-#      --project "WebGoat-SCA" `
-#      --scan "." `
-#      --out "sca-report" `
-#      --format "ALL" `
-#      --nvdApiKey "FE087115-BDCE-F011-8364-129478FCB64D" `
-#      --validForHours 24 `
-#  displayName: "Run SCA - OWASP Dependency Check (Offline mode)"
-
-  # Publish report as pipeline artifact
-
+# Download OWASP Dependency Check
 - task: PowerShell@2
   displayName: "Download OWASP Dependency-Check"
   inputs:
@@ -46,13 +24,14 @@ steps:
       $zip = "$(Build.SourcesDirectory)\dependency-check.zip"
       Invoke-WebRequest -Uri "https://github.com/jeremylong/DependencyCheck/releases/download/v10.0.4/dependency-check-10.0.4-release.zip" -OutFile $zip
       Expand-Archive -LiteralPath $zip -DestinationPath "$(Build.SourcesDirectory)" -Force
-
-      # Rename whatever folder extracted
+      
+      # Rename extracted folder
       Get-ChildItem "$(Build.SourcesDirectory)" -Directory |
         Where-Object { $_.Name -like "dependency-check*" } |
         Select-Object -First 1 |
         Rename-Item -NewName "dependency-check"
 
+# Run OWASP Dependency Check
 - task: PowerShell@2
   displayName: "Run OWASP Dependency Check"
   inputs:
@@ -60,7 +39,6 @@ steps:
     script: |
       $scanPath = "$(Build.SourcesDirectory)"
       $outPath = "$(Build.SourcesDirectory)\sca-report"
-
       New-Item -ItemType Directory -Force -Path $outPath | Out-Null
 
       & "$(Build.SourcesDirectory)\dependency-check\bin\dependency-check.bat" `
@@ -69,11 +47,12 @@ steps:
         --format "HTML" `
         --out "$outPath" `
         --validForHours 24 `
-        --nvdApiKey "$(NVD_API_KEY)"
+        --nvdApiKey "$(NVD_API_KEY)"   # ensure this exists in variable group
 
+# Publish report
 - task: PublishPipelineArtifact@1
+  displayName: "Publish SCA report"
   inputs:
     targetPath: 'sca-report'
     artifact: 'sca-report'
     publishLocation: 'pipeline'
-  displayName: "Publish SCA report"
