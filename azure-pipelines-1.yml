@@ -22,6 +22,10 @@ steps:
 # Run SCA scan
 - powershell: |
     Write-Host "Running Dependency Check..."
+    # Create output folder if it doesn't exist
+    if (-Not (Test-Path "sca-report")) {
+        New-Item -ItemType Directory -Path "sca-report" | Out-Null
+    }
     $dcPath = Get-ChildItem -Directory "dependency-check" | Select-Object -First 1
     & "$($dcPath.FullName)\bin\dependency-check.bat" `
       --project "WebGoat-SCA" `
@@ -30,7 +34,7 @@ steps:
       --format "ALL"
   displayName: "Run SCA - OWASP Dependency Check"
   
-# Publish report as pipeline artifact
+  # Publish report as pipeline artifact
 - task: PublishPipelineArtifact@1
   inputs:
     targetPath: 'sca-report'
