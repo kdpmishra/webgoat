@@ -4,6 +4,9 @@ trigger:
 pool:
   name: 'Default'
 
+variables:
+  - group: DevSecOps-Secrets
+    
 steps:
 
 # 1) Download & extract Dependency-Check
