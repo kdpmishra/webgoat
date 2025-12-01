@@ -11,3 +11,28 @@ steps:
     echo "Successfully pulled WebGoat repo from GitHub"
     tree
   displayName: "Verify repo files"
+
+# Install Dependency Check — only needed on first run
+- powershell: |
+    Write-Host "Downloading OWASP Dependency Check..."
+    Invoke-WebRequest "https://github.com/jeremylong/DependencyCheck/releases/download/v10.0.4/dependency-check-10.0.4-release.zip" -OutFile "dc.zip"
+    Expand-Archive "dc.zip" -DestinationPath "dependency-check" -Force
+  displayName: "Install OWASP Dependency Check"
+
+# Run SCA scan
+- powershell: |
+    Write-Host "Running Dependency Check..."
+    dependency-check/bin/dependency-check.bat `
+      --project "WebGoat-SCA" `
+      --scan "." `
+      --out "sca-report" `
+      --format "ALL"
+  displayName: "Run SCA - OWASP Dependency Check"
+
+# Publish report as pipeline artifact
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: 'sca-report'
+    artifact: 'sca-report'
+    publishLocation: 'pipeline'
+  displayName: "Publish SCA report"
