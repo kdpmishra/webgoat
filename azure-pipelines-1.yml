@@ -3,38 +3,18 @@ trigger:
 
 pool:
   name: 'Default'  # your self-hosted Windows agent pool
-
+  
 steps:
 
-# 1) Run Trivy scan
+# 1) Download Trivy
 - task: PowerShell@2
-  displayName: "Run Trivy SCA Scan"
+  displayName: "Download Trivy"
   inputs:
     targetType: 'inline'
     script: |
-      $scanPath = "$(Build.SourcesDirectory)"
-      $reportDir = "$(Build.SourcesDirectory)\trivy-report"
-      New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+      $trivyUrl = "https://github.com/aquasecurity/trivy/releases/download/v1.5.1/trivy_1.5.1_Windows-64bit.zip"
+      $zipPath = "$(Build.SourcesDirectory)\trivy.zip"
+      Write-Host "Downloading Trivy..."
+      Invoke-WebRequest -Uri $trivyUrl -OutFile $zipPath
 
-      Write-Host "Running Trivy filesystem scan..."
-      & "$(Build.SourcesDirectory)\trivy.exe" fs `
-        --format template `
-        --template "@contrib/html.tpl" `
-        --output "$reportDir\trivy-report.html" `
-        --severity CRITICAL,HIGH,MEDIUM `
-        $scanPath
-
-      & "$(Build.SourcesDirectory)\trivy.exe" fs `
-        --format json `
-        --output "$reportDir\trivy-report.json" `
-        --severity CRITICAL,HIGH,MEDIUM `
-        $scanPath
-
-      Write-Host "Trivy reports generated at $reportDir"
-
-# 2) Publish report as artifact
-- task: PublishBuildArtifacts@1
-  displayName: "Publish Trivy Report"
-  inputs:
-    pathToPublish: $(Build.SourcesDirectory)/trivy-report
-    artifactName: trivy-report
+      Write-Host "Extractin
