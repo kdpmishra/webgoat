@@ -3,60 +3,62 @@ trigger:
 
 pool:
   name: 'Default'  # your self-hosted Windows agent pool
-  
+
 steps:
 
-# 1) Download Trivy
+# 1) Download & extract Trivy
 - task: PowerShell@2
-  displayName: "Download Trivy"
+  displayName: "Download and Extract Trivy"
   inputs:
     targetType: 'inline'
     script: |
-      $trivyUrl = "https://github.com/aquasecurity/trivy/releases/download/v1.5.1/trivy_1.5.1_Windows-64bit.zip"
-      $zipPath = '$(Build.SourcesDirectory)\trivy.zip'
+      $trivyUrl = 'https://github.com/aquasecurity/trivy/releases/download/v1.5.1/trivy_1.5.1_Windows-64bit.zip'
+      $zipPath = Join-Path "$(Build.SourcesDirectory)" 'trivy.zip'
+      $extractDir = "$(Build.SourcesDirectory)"
+
       Write-Host "Downloading Trivy..."
       Invoke-WebRequest -Uri $trivyUrl -OutFile $zipPath
 
       Write-Host "Extracting Trivy..."
-      Expand-Archive -LiteralPath $zipPath -DestinationPath '$(Build.SourcesDirectory)' -Force
+      Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force
 
-      # Find extracted folder
-      $trivyFolder = Get-ChildItem '$(Build.SourcesDirectory)' -Directory | Where-Object { $_.Name -like "trivy*" } | Select-Object -First 1
+      # Find the folder containing trivy.exe
+      $trivyFolder = Get-ChildItem $extractDir -Directory | Where-Object { $_.Name -like 'trivy*' } | Select-Object -First 1
       if ($null -eq $trivyFolder) { throw "Trivy folder not found after extraction" }
 
-      # Save full path to trivy.exe
-      $trivyExe = Join-Path $trivyFolder.FullName "trivy.exe"
+      $trivyExe = Join-Path $trivyFolder.FullName 'trivy.exe'
       if (!(Test-Path $trivyExe)) { throw "trivy.exe not found in extracted folder" }
 
-      Write-Host "Trivy executable located at: $trivyExe"
-      # Save to pipeline variable for next steps
+      Write-Host "Trivy executable located at $trivyExe"
+
+      # Set variable for later steps
       Write-Host "##vso[task.setvariable variable=TRIVY_EXE]$trivyExe"
 
-# 2) Run Trivy scan
+# 2) Run Trivy filesystem scan
 - task: PowerShell@2
   displayName: "Run Trivy SCA Scan"
   inputs:
     targetType: 'inline'
     script: |
-      $trivyExe = '$(TRIVY_EXE)'
-      $scanPath = '$(Build.SourcesDirectory)'
-      $reportDir = '$(Build.SourcesDirectory)\trivy-report'
+      $trivyExe = "$(TRIVY_EXE)"
+      $scanPath = "$(Build.SourcesDirectory)"
+      $reportDir = Join-Path "$(Build.SourcesDirectory)" 'trivy-report'
       New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 
       Write-Host "Running Trivy filesystem scan..."
-      
+
       # HTML report
       & $trivyExe fs `
         --format template `
         --template "@contrib/html.tpl" `
-        --output "$reportDir\trivy-report.html" `
+        --output (Join-Path $reportDir 'trivy-report.html') `
         --severity CRITICAL,HIGH,MEDIUM `
         $scanPath
 
       # JSON report
       & $trivyExe fs `
         --format json `
-        --output '$reportDir\trivy-report.json' `
+        --output (Join-Path $reportDir 'trivy-report.json') `
         --severity CRITICAL,HIGH,MEDIUM `
         $scanPath
 
