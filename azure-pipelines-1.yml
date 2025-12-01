@@ -9,5 +9,5 @@ steps:
 
 - script: |
     echo "Successfully pulled WebGoat repo from GitHub"
-    ls -R
+    tree
   displayName: "Verify repo files"
