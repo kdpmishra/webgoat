@@ -32,8 +32,10 @@ steps:
       --scan "." `
       --out "sca-report" `
       --format "ALL" `
-      --nvdApiKey "$(NVD_API_KEY)"
-  displayName: "Run SCA - OWASP Dependency Check (with NVD key)"  
+      --nvdApiKey "FE087115-BDCE-F011-8364-129478FCB64D" `
+      --cveValidForHours 720
+  displayName: "Run SCA - OWASP Dependency Check (Offline mode)"
+
   # Publish report as pipeline artifact
 - task: PublishPipelineArtifact@1
   inputs:
