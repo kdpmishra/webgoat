@@ -2,71 +2,72 @@ trigger:
 - master
 
 pool:
-  name: 'Default'  # your self-hosted Windows agent pool
-
+  name: 'Default'  # adjust if your pool name is different
+  
 steps:
 
-# 1) Download & extract Trivy
+# 1) Fetch latest Trivy release URL and download
 - task: PowerShell@2
-  displayName: "Download and Extract Trivy"
+  displayName: "Download latest Trivy"
   inputs:
     targetType: 'inline'
     script: |
-      $trivyUrl = 'https://github.com/aquasecurity/trivy/releases/download/v1.5.1/trivy_1.5.1_Windows-64bit.zip'
+      # Query GitHub API for latest release
+      $apiUrl = 'https://api.github.com/repos/aquasecurity/trivy/releases/latest'
+      $resp = Invoke-RestMethod -Uri $apiUrl -Headers @{ 'Accept' = 'application/vnd.github+json'; 'User-Agent' = 'azure-pipeline-script' }
+      # Find Windows 64‑bit zip asset
+      $asset = $resp.assets | Where-Object { $_.name -match 'windows-64bit.zip$' } | Select-Object -First 1
+      if ($null -eq $asset) {
+        throw "Cannot find Windows 64‑bit ZIP in latest Trivy release assets"
+      }
+      $downloadUrl = $asset.browser_download_url
+      Write-Host "Downloading Trivy from $downloadUrl"
+
       $zipPath = Join-Path "$(Build.SourcesDirectory)" 'trivy.zip'
-      $extractDir = "$(Build.SourcesDirectory)"
+      Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -UseBasicParsing
 
-      Write-Host "Downloading Trivy..."
-      Invoke-WebRequest -Uri $trivyUrl -OutFile $zipPath
-
-      Write-Host "Extracting Trivy..."
-      Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force
-
-      # Find the folder containing trivy.exe
-      $trivyFolder = Get-ChildItem $extractDir -Directory | Where-Object { $_.Name -like 'trivy*' } | Select-Object -First 1
+      # Extract
+      Expand-Archive -LiteralPath $zipPath -DestinationPath "$(Build.SourcesDirectory)" -Force
+      # Find extracted folder
+      $trivyFolder = Get-ChildItem "$(Build.SourcesDirectory)" -Directory | Where-Object { $_.Name -match 'trivy' } | Select-Object -First 1
       if ($null -eq $trivyFolder) { throw "Trivy folder not found after extraction" }
 
       $trivyExe = Join-Path $trivyFolder.FullName 'trivy.exe'
-      if (!(Test-Path $trivyExe)) { throw "trivy.exe not found in extracted folder" }
+      if (!(Test-Path $trivyExe)) { throw "trivy.exe not found: $trivyExe" }
 
-      Write-Host "Trivy executable located at $trivyExe"
-
-      # Set variable for later steps
+      Write-Host "Trivy executable: $trivyExe"
       Write-Host "##vso[task.setvariable variable=TRIVY_EXE]$trivyExe"
 
-# 2) Run Trivy filesystem scan
+# 2) Run Trivy filesystem scan for your repo
 - task: PowerShell@2
-  displayName: "Run Trivy SCA Scan"
+  displayName: "Run Trivy Scan"
   inputs:
     targetType: 'inline'
     script: |
-      $trivyExe = "$(TRIVY_EXE)"
+      $trivy = "$(TRIVY_EXE)"
       $scanPath = "$(Build.SourcesDirectory)"
       $reportDir = Join-Path "$(Build.SourcesDirectory)" 'trivy-report'
       New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 
-      Write-Host "Running Trivy filesystem scan..."
-
-      # HTML report
-      & $trivyExe fs `
+      Write-Host "Scanning: $scanPath"
+      & $trivy fs `
         --format template `
         --template "@contrib/html.tpl" `
-        --output (Join-Path $reportDir 'trivy-report.html') `
+        --output (Join-Path $reportDir 'report.html') `
         --severity CRITICAL,HIGH,MEDIUM `
         $scanPath
 
-      # JSON report
-      & $trivyExe fs `
+      & $trivy fs `
         --format json `
-        --output (Join-Path $reportDir 'trivy-report.json') `
+        --output (Join-Path $reportDir 'report.json') `
         --severity CRITICAL,HIGH,MEDIUM `
         $scanPath
 
-      Write-Host "Trivy reports generated at $reportDir"
+      Write-Host "Reports generated at: $reportDir"
 
-# 3) Publish Trivy report as artifact
+# 3) Publish report artifact
 - task: PublishBuildArtifacts@1
   displayName: "Publish Trivy Report"
   inputs:
-    pathToPublish: $(Build.SourcesDirectory)/trivy-report
-    artifactName: trivy-report
+    pathToPublish: '$(Build.SourcesDirectory)/trivy-report'
+    artifactName: 'trivy-report'
