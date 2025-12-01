@@ -50,7 +50,7 @@ steps:
       if (!(Test-Path $exe)) { throw "Dependency-Check executable not found: $exe" }
 
       Write-Host "Starting scan..."
-      & $exe --project "WebGoat" --scan "$scan" --format "HTML" --out "$report" --ttl 24 --nvdApiKey "$(NVD_API_KEY)"
+      & $exe --project "WebGoat" --scan "$scan" --format "HTML" --out "$report" --nvdApiKey "$(NVD_API_KEY)"
 
       Write-Host "SCA Report generated at: $report"
 
