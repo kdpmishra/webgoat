@@ -39,6 +39,16 @@ steps:
   # Publish report as pipeline artifact
 
 - task: PowerShell@2
+  displayName: "Download OWASP Dependency-Check"
+  inputs:
+    targetType: 'inline'
+    script: |
+      $zip = "$(Build.SourcesDirectory)\dependency-check.zip"
+      Invoke-WebRequest -Uri "https://github.com/jeremylong/DependencyCheck/releases/download/v10.0.4/dependency-check-10.0.4-release.zip" -OutFile $zip
+      Expand-Archive -LiteralPath $zip -DestinationPath "$(Build.SourcesDirectory)" -Force
+      Rename-Item -Path "$(Build.SourcesDirectory)\dependency-check-10.0.4" -NewName "dependency-check"
+
+- task: PowerShell@2
   displayName: "Run OWASP Dependency Check"
   inputs:
     targetType: 'inline'
