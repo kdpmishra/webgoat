@@ -1,0 +1,40 @@
+# Docker
+# Build a Docker image
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+- master
+
+resources:
+- repo: self
+
+pool:
+  name: 'SelfHostedPool'
+
+steps:
+- checkout: self
+
+# Install Dependency-Check (only first run, skip if already installed)
+- script: |
+    echo Installing OWASP Dependency Check
+    wget https://github.com/jeremylong/DependencyCheck/releases/download/v10.0.4/dependency-check-10.0.4-release.zip -O dc.zip
+    unzip dc.zip -d dependency-check
+  displayName: "Install Dependency Check"
+  condition: always()
+
+# Run SCA scan on the repo
+- script: |
+    ./dependency-check/bin/dependency-check.sh \
+      --project "MyRepo-SCA" \
+      --scan "." \
+      --out "sca-report" \
+      --format "ALL"
+  displayName: "Run Software Composition Analysis (OWASP Dependency Check)"
+
+# Publish HTML report to Azure Pipeline
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: 'sca-report'
+    artifact: 'sca-report'
+    publishLocation: 'pipeline'
+  displayName: "Publish SCA report"
