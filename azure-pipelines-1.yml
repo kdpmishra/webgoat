@@ -1,0 +1,13 @@
+trigger:
+- master    # or your default branch
+
+pool:
+  name: 'SelfHosedPool'   # your self-hosted runner pool
+
+steps:
+- checkout: self
+
+- script: |
+    echo "Successfully pulled WebGoat repo from GitHub"
+    ls -R
+  displayName: "Verify repo files"
