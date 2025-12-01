@@ -13,8 +13,58 @@ steps:
     targetType: 'inline'
     script: |
       $trivyUrl = "https://github.com/aquasecurity/trivy/releases/download/v1.5.1/trivy_1.5.1_Windows-64bit.zip"
-      $zipPath = "$(Build.SourcesDirectory)\trivy.zip"
+      $zipPath = '$(Build.SourcesDirectory)\trivy.zip'
       Write-Host "Downloading Trivy..."
       Invoke-WebRequest -Uri $trivyUrl -OutFile $zipPath
 
-      Write-Host "Extractin
+      Write-Host "Extracting Trivy..."
+      Expand-Archive -LiteralPath $zipPath -DestinationPath '$(Build.SourcesDirectory)' -Force
+
+      # Find extracted folder
+      $trivyFolder = Get-ChildItem '$(Build.SourcesDirectory)' -Directory | Where-Object { $_.Name -like "trivy*" } | Select-Object -First 1
+      if ($null -eq $trivyFolder) { throw "Trivy folder not found after extraction" }
+
+      # Save full path to trivy.exe
+      $trivyExe = Join-Path $trivyFolder.FullName "trivy.exe"
+      if (!(Test-Path $trivyExe)) { throw "trivy.exe not found in extracted folder" }
+
+      Write-Host "Trivy executable located at: $trivyExe"
+      # Save to pipeline variable for next steps
+      Write-Host "##vso[task.setvariable variable=TRIVY_EXE]$trivyExe"
+
+# 2) Run Trivy scan
+- task: PowerShell@2
+  displayName: "Run Trivy SCA Scan"
+  inputs:
+    targetType: 'inline'
+    script: |
+      $trivyExe = '$(TRIVY_EXE)'
+      $scanPath = '$(Build.SourcesDirectory)'
+      $reportDir = '$(Build.SourcesDirectory)\trivy-report'
+      New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+
+      Write-Host "Running Trivy filesystem scan..."
+      
+      # HTML report
+      & $trivyExe fs `
+        --format template `
+        --template "@contrib/html.tpl" `
+        --output "$reportDir\trivy-report.html" `
+        --severity CRITICAL,HIGH,MEDIUM `
+        $scanPath
+
+      # JSON report
+      & $trivyExe fs `
+        --format json `
+        --output '$reportDir\trivy-report.json' `
+        --severity CRITICAL,HIGH,MEDIUM `
+        $scanPath
+
+      Write-Host "Trivy reports generated at $reportDir"
+
+# 3) Publish Trivy report as artifact
+- task: PublishBuildArtifacts@1
+  displayName: "Publish Trivy Report"
+  inputs:
+    pathToPublish: $(Build.SourcesDirectory)/trivy-report
+    artifactName: trivy-report
