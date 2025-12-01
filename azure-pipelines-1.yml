@@ -2,61 +2,41 @@ trigger:
 - master
 
 pool:
-  name: 'Default'
+  name: 'Default'  # your self-hosted Windows agent pool
+  demands:
+    - Agent.OS -equals Windows
 
-variables:
-  - group: DevSecOps-Secrets
-    
 steps:
 
-# 1) Download & extract Dependency-Check
+# 1) Run Trivy scan
 - task: PowerShell@2
-  displayName: "Download & Extract Dependency-Check"
+  displayName: "Run Trivy SCA Scan"
   inputs:
     targetType: 'inline'
     script: |
-      $source = "https://github.com/jeremylong/DependencyCheck/releases/download/v10.0.4/dependency-check-10.0.4-release.zip"
-      $zip = "$(Build.SourcesDirectory)\dependency-check.zip"
-      $extract = "$(Build.SourcesDirectory)"
+      $scanPath = "$(Build.SourcesDirectory)"
+      $reportDir = "$(Build.SourcesDirectory)\trivy-report"
+      New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 
-      Write-Host "Downloading Dependency-Check..."
-      Invoke-WebRequest -Uri $source -OutFile $zip
+      Write-Host "Running Trivy filesystem scan..."
+      & "$(Build.SourcesDirectory)\trivy.exe" fs `
+        --format template `
+        --template "@contrib/html.tpl" `
+        --output "$reportDir\trivy-report.html" `
+        --severity CRITICAL,HIGH,MEDIUM `
+        $scanPath
 
-      Write-Host "Extracting..."
-      Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+      & "$(Build.SourcesDirectory)\trivy.exe" fs `
+        --format json `
+        --output "$reportDir\trivy-report.json" `
+        --severity CRITICAL,HIGH,MEDIUM `
+        $scanPath
 
-      $folder = Get-ChildItem $extract -Directory | Where-Object { $_.Name -like "dependency-check*" } | Select-Object -First 1
+      Write-Host "Trivy reports generated at $reportDir"
 
-      if ($null -eq $folder) { throw "Dependency-Check folder not found after extraction" }
-
-      if ($folder.Name -ne "dependency-check") {
-        Rename-Item -Path $folder.FullName -NewName "dependency-check" -Force
-        Write-Host "Renamed extracted folder to 'dependency-check'"
-      } else {
-        Write-Host "Folder already named 'dependency-check'"
-      }
-
-# 2) Run scan
-- task: PowerShell@2
-  displayName: "Run SCA Scan"
-  inputs:
-    targetType: 'inline'
-    script: |
-      $scan = "$(Build.SourcesDirectory)"
-      $report = "$(Build.SourcesDirectory)\sca-report"
-      New-Item -ItemType Directory -Force -Path $report | Out-Null
-
-      $exe = "$(Build.SourcesDirectory)\dependency-check\bin\dependency-check.bat"
-      if (!(Test-Path $exe)) { throw "Dependency-Check executable not found: $exe" }
-
-      Write-Host "Starting scan..."
-      & $exe --project "WebGoat" --scan "$scan" --format "HTML" --out "$report" --nvdApiKey "$(NVD_API_KEY)"
-
-      Write-Host "SCA Report generated at: $report"
-
-# 3) Publish report
+# 2) Publish report as artifact
 - task: PublishBuildArtifacts@1
-  displayName: "Publish SCA Report"
+  displayName: "Publish Trivy Report"
   inputs:
-    pathToPublish: "$(Build.SourcesDirectory)/sca-report"
-    artifactName: "sca-report"
+    pathToPublish: $(Build.SourcesDirectory)/trivy-report
+    artifactName: trivy-report
